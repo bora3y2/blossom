@@ -293,7 +293,7 @@ class _UploadPostScreenState extends State<UploadPostScreen> {
       if (image != null) {
         final userId = session.currentUserId ?? 'unknown';
         final fileName = '$userId/${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await session.client!.storage.from('posts').upload(
+        await session.client!.storage.from('post-images').upload(
           fileName,
           image,
           fileOptions: const FileOptions(
@@ -302,7 +302,7 @@ class _UploadPostScreenState extends State<UploadPostScreen> {
           ),
         );
         imagePath =
-            session.client!.storage.from('posts').getPublicUrl(fileName);
+            session.client!.storage.from('post-images').getPublicUrl(fileName);
       }
       final repository = CommunityRepository(session);
       await repository.createPost(content: content, imagePath: imagePath);
