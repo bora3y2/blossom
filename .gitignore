@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Design mockup folders (not code)
+add_plant_step_1_preferences_updated/
+add_plant_step_2_suggestions_clean_ui/
+add_plant_step_3_care_detail_final/
+change_password/
+comments_feed/
+community_feed_home_tab_active/
+design_system_from_community_feed/
+garden_home_clean_header/
+gardener_assistant_simplified_view/
+log_in_centered_aligned/
+my_garden_simplified_view/
+privacy_policy/
+profile_final_design/
+sign_up_screen/
+upload_post/
+
+# Claude Code
+.claude/
