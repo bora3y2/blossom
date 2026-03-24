@@ -23,6 +23,20 @@ USER_PLANT_SELECT_COLUMNS = """
     up.updated_at
 """
 
+USER_PLANT_RETURNING_COLUMNS = """
+    id::text as id,
+    user_id::text as user_id,
+    plant_id::text as plant_id,
+    custom_name,
+    location_type,
+    light_condition,
+    caring_style,
+    pet_safety_priority,
+    created_via,
+    created_at,
+    updated_at
+"""
+
 CARE_TASK_SELECT_COLUMNS = """
     id::text as id,
     user_plant_id::text as user_plant_id,
@@ -176,7 +190,7 @@ class GardenService:
                 :pet_safety_priority,
                 :created_via
             )
-            returning {USER_PLANT_SELECT_COLUMNS}
+            returning {USER_PLANT_RETURNING_COLUMNS}
             """
         )
         result = await session.execute(query, {**payload, "user_id": user_id})
