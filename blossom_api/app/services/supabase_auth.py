@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import jwt
+from jwt import PyJWKClient
 from fastapi import HTTPException, status
 
 from app.core.config import settings
@@ -13,6 +14,16 @@ class AuthenticatedUser:
     auth_role: str | None
 
 
+_jwks_client: PyJWKClient | None = None
+
+
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(f"{settings.supabase_url}/.well-known/jwks.json")
+    return _jwks_client
+
+
 class SupabaseAuthService:
     def __init__(self):
         self.admin_client: Client | None = None
@@ -21,14 +32,12 @@ class SupabaseAuthService:
                 settings.supabase_url,
                 settings.supabase_service_role_key
             )
+
     def decode_access_token(self, token: str) -> AuthenticatedUser:
-        if not settings.supabase_jwt_secret and settings.environment != "local":
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="SUPABASE_JWT_SECRET is not configured",
-            )
         try:
-            if settings.supabase_jwt_secret:
+            if settings.environment == "local" and not settings.supabase_jwt_secret:
+                payload = jwt.decode(token, options={"verify_signature": False})
+            elif settings.supabase_jwt_secret:
                 payload = jwt.decode(
                     token,
                     settings.supabase_jwt_secret,
@@ -36,7 +45,13 @@ class SupabaseAuthService:
                     audience="authenticated",
                 )
             else:
-                payload = jwt.decode(token, options={"verify_signature": False})
+                signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
+                payload = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["ES256", "RS256"],
+                    audience="authenticated",
+                )
         except jwt.PyJWTError as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
