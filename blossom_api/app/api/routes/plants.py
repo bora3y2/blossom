@@ -13,9 +13,21 @@ router = APIRouter(prefix="/plants", tags=["plants"])
 async def list_plants(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    location_type: str | None = Query(default=None),
+    light_condition: str | None = Query(default=None),
+    caring_style: str | None = Query(default=None),
+    pet_safe_only: bool = Query(default=False),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[PlantResponse]:
-    plants = await plant_service.list_plants(session, limit=limit, offset=offset)
+    plants = await plant_service.list_plants(
+        session,
+        limit=limit,
+        offset=offset,
+        location_type=location_type,
+        light_condition=light_condition,
+        caring_style=caring_style,
+        pet_safe_only=pet_safe_only,
+    )
     return [PlantResponse(**plant) for plant in plants]
 
 

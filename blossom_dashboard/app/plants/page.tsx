@@ -14,6 +14,7 @@ import {
   listAdminPlants,
   updateAdminPlant,
 } from '@/lib/api';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
 import type { Plant, PlantMutationPayload } from '@/lib/types';
 
 type PlantFormState = {
@@ -25,6 +26,8 @@ type PlantFormState = {
   lightRequirements: string;
   temperature: string;
   petSafe: boolean;
+  locationType: string;
+  caringDifficulty: string;
   source: 'admin' | 'ai_image_discovery';
   aiConfidence: string;
   reviewedByAdmin: boolean;
@@ -41,6 +44,8 @@ function emptyForm(): PlantFormState {
     lightRequirements: '',
     temperature: '',
     petSafe: false,
+    locationType: 'Both',
+    caringDifficulty: 'low',
     source: 'admin',
     aiConfidence: '',
     reviewedByAdmin: true,
@@ -58,6 +63,8 @@ function toFormState(plant: Plant): PlantFormState {
     lightRequirements: plant.light_requirements,
     temperature: plant.temperature,
     petSafe: plant.pet_safe,
+    locationType: plant.location_type ?? 'Both',
+    caringDifficulty: plant.caring_difficulty ?? 'low',
     source: plant.source,
     aiConfidence: plant.ai_confidence == null ? '' : String(plant.ai_confidence),
     reviewedByAdmin: plant.reviewed_by_admin,
@@ -75,6 +82,8 @@ function toPayload(form: PlantFormState): PlantMutationPayload {
     light_requirements: form.lightRequirements.trim(),
     temperature: form.temperature.trim(),
     pet_safe: form.petSafe,
+    location_type: form.locationType,
+    caring_difficulty: form.caringDifficulty,
     source: form.source,
     ai_confidence: form.aiConfidence.trim() === '' ? null : Number(form.aiConfidence),
     reviewed_by_admin: form.reviewedByAdmin,
@@ -89,12 +98,30 @@ function upsertPlant(plants: Plant[], plant: Plant) {
   return next.sort((left, right) => left.common_name.localeCompare(right.common_name));
 }
 
+async function uploadPlantImage(file: File): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured. Cannot upload image.');
+  }
+  const extension = file.name.split('.').pop() ?? 'jpg';
+  const fileName = `${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from('plant-images').upload(fileName, file, { upsert: false });
+  if (error) {
+    throw new Error(`Image upload failed: ${error.message}`);
+  }
+  const { data } = supabase.storage.from('plant-images').getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
 export default function PlantsPage() {
   const { session } = useAuth();
   const accessToken = session?.access_token ?? null;
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [form, setForm] = useState<PlantFormState>(emptyForm());
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -172,6 +199,8 @@ export default function PlantsPage() {
   const handleSelectPlant = (plant: Plant) => {
     setSelectedPlantId(plant.id);
     setForm(toFormState(plant));
+    setImageFile(null);
+    setImagePreviewUrl(null);
     setError(null);
     setSuccessMessage(null);
   };
@@ -179,6 +208,8 @@ export default function PlantsPage() {
   const handleCreateNew = () => {
     setSelectedPlantId(null);
     setForm(emptyForm());
+    setImageFile(null);
+    setImagePreviewUrl(null);
     setError(null);
     setSuccessMessage(null);
   };
@@ -194,7 +225,16 @@ export default function PlantsPage() {
     setSuccessMessage(null);
 
     try {
-      const payload = toPayload(form);
+      let currentImagePath = form.imagePath;
+
+      if (imageFile) {
+        setUploadingImage(true);
+        currentImagePath = await uploadPlantImage(imageFile);
+        setUploadingImage(false);
+      }
+
+      const formWithImage = { ...form, imagePath: currentImagePath };
+      const payload = toPayload(formWithImage);
       if (!payload.common_name || !payload.water_requirements || !payload.light_requirements || !payload.temperature) {
         throw new Error('Please fill in the required plant fields before saving.');
       }
@@ -206,11 +246,14 @@ export default function PlantsPage() {
       setPlants((current) => upsertPlant(current, savedPlant));
       setSelectedPlantId(savedPlant.id);
       setForm(toFormState(savedPlant));
+      setImageFile(null);
+      setImagePreviewUrl(null);
       setSuccessMessage(selectedPlantId ? 'Plant updated successfully.' : 'Plant created successfully.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save plant.');
     } finally {
       setSaving(false);
+      setUploadingImage(false);
     }
   };
 
@@ -417,14 +460,35 @@ export default function PlantsPage() {
               </label>
 
               <div className="grid gap-6 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-200">Image URL</span>
-                  <input
-                    value={form.imagePath}
-                    onChange={(event) => setForm((current) => ({ ...current, imagePath: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-emerald-400"
-                  />
-                </label>
+                <div className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-200">Plant image</span>
+                  {(imagePreviewUrl ?? form.imagePath) ? (
+                    <div className="mb-3">
+                      <img
+                        src={imagePreviewUrl ?? form.imagePath ?? ''}
+                        alt="Plant preview"
+                        className="h-32 w-full rounded-2xl object-cover"
+                      />
+                    </div>
+                  ) : null}
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-600 bg-slate-950 px-4 py-4 text-sm text-slate-300 transition hover:border-emerald-400 hover:text-emerald-300">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        setImageFile(file);
+                        setImagePreviewUrl(file ? URL.createObjectURL(file) : null);
+                      }}
+                    />
+                    {uploadingImage ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                    {imageFile ? imageFile.name : 'Choose image…'}
+                  </label>
+                  {form.imagePath && !imageFile ? (
+                    <p className="mt-1 truncate text-xs text-slate-500">{form.imagePath}</p>
+                  ) : null}
+                </div>
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-slate-200">Temperature</span>
                   <input
@@ -488,6 +552,32 @@ export default function PlantsPage() {
                 </label>
               </div>
 
+              <div className="grid gap-6 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-200">Location type</span>
+                  <select
+                    value={form.locationType}
+                    onChange={(event) => setForm((current) => ({ ...current, locationType: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-emerald-400"
+                  >
+                    <option value="Both">Both (Indoor &amp; Outdoor)</option>
+                    <option value="Indoor">Indoor</option>
+                    <option value="Outdoor">Outdoor</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-200">Caring difficulty</span>
+                  <select
+                    value={form.caringDifficulty}
+                    onChange={(event) => setForm((current) => ({ ...current, caringDifficulty: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition focus:border-emerald-400"
+                  >
+                    <option value="low">Low — forgiving for forgetful owners</option>
+                    <option value="high">High — needs daily attention</option>
+                  </select>
+                </label>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-4">
                   <span className="text-sm font-medium text-white">Pet safe</span>
@@ -525,7 +615,7 @@ export default function PlantsPage() {
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save className="h-4 w-4" />
-                  {saving ? 'Saving...' : selectedPlant ? 'Save changes' : 'Create plant'}
+                  {uploadingImage ? 'Uploading image…' : saving ? 'Saving…' : selectedPlant ? 'Save changes' : 'Create plant'}
                 </button>
                 <button
                   type="button"

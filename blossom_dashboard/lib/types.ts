@@ -41,6 +41,8 @@ export type Plant = {
   light_requirements: string;
   temperature: string;
   pet_safe: boolean;
+  location_type: string;
+  caring_difficulty: string;
   source: 'admin' | 'ai_image_discovery';
   ai_confidence: number | null;
   created_by_user_id: string | null;
@@ -59,6 +61,8 @@ export type PlantMutationPayload = Partial<{
   light_requirements: string;
   temperature: string;
   pet_safe: boolean;
+  location_type: string;
+  caring_difficulty: string;
   source: 'admin' | 'ai_image_discovery';
   ai_confidence: number | null;
   reviewed_by_admin: boolean;

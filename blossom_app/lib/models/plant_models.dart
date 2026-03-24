@@ -9,6 +9,8 @@ class PlantModel {
     required this.lightRequirements,
     required this.temperature,
     required this.petSafe,
+    required this.locationType,
+    required this.caringDifficulty,
   });
 
   final String id;
@@ -20,6 +22,8 @@ class PlantModel {
   final String lightRequirements;
   final String temperature;
   final bool petSafe;
+  final String locationType;
+  final String caringDifficulty;
 
   factory PlantModel.fromJson(Map<String, dynamic> json) {
     return PlantModel(
@@ -32,6 +36,8 @@ class PlantModel {
       lightRequirements: json['light_requirements'] as String,
       temperature: json['temperature'] as String,
       petSafe: json['pet_safe'] as bool? ?? false,
+      locationType: (json['location_type'] as String?) ?? 'Both',
+      caringDifficulty: (json['caring_difficulty'] as String?) ?? 'low',
     );
   }
 }

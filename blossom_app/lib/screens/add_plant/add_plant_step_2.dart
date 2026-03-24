@@ -24,7 +24,7 @@ class _AddPlantStep2ScreenState extends State<AddPlantStep2Screen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _plantsFuture = PlantRepository(AppSessionScope.of(context)).fetchCatalog();
+    _plantsFuture = PlantRepository(AppSessionScope.of(context)).fetchCatalog(draft: widget.draft);
   }
 
   @override
@@ -110,7 +110,7 @@ class _AddPlantStep2ScreenState extends State<AddPlantStep2Screen> {
                               setState(() {
                                 _plantsFuture = PlantRepository(
                                   AppSessionScope.of(context),
-                                ).fetchCatalog();
+                                ).fetchCatalog(draft: widget.draft);
                               });
                             },
                             child: const Text('Try again'),

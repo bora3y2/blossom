@@ -16,6 +16,8 @@ class PlantResponse(BaseModel):
     light_requirements: str
     temperature: str
     pet_safe: bool
+    location_type: str
+    caring_difficulty: str
     source: Literal["admin", "ai_image_discovery"]
     ai_confidence: float | None
     created_by_user_id: str | None
@@ -34,6 +36,8 @@ class PlantCreateRequest(BaseModel):
     light_requirements: str
     temperature: str
     pet_safe: bool = False
+    location_type: str = "Both"
+    caring_difficulty: str = "low"
     source: Literal["admin", "ai_image_discovery"] = "admin"
     ai_confidence: float | None = None
     reviewed_by_admin: bool = False
@@ -49,6 +53,8 @@ class PlantUpdateRequest(BaseModel):
     light_requirements: str | None = None
     temperature: str | None = None
     pet_safe: bool | None = None
+    location_type: str | None = None
+    caring_difficulty: str | None = None
     source: Literal["admin", "ai_image_discovery"] | None = None
     ai_confidence: float | None = None
     reviewed_by_admin: bool | None = None

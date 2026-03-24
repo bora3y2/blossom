@@ -15,6 +15,8 @@ PLANT_SELECT_COLUMNS = """
     light_requirements,
     temperature,
     pet_safe,
+    location_type,
+    caring_difficulty,
     source,
     ai_confidence,
     created_by_user_id::text as created_by_user_id,
@@ -67,8 +69,33 @@ class PlantService:
         include_inactive: bool = False,
         limit: int | None = None,
         offset: int = 0,
+        location_type: str | None = None,
+        light_condition: str | None = None,
+        caring_style: str | None = None,
+        pet_safe_only: bool = False,
     ) -> list[dict[str, Any]]:
-        where_clause = "" if include_inactive else "where is_active = true"
+        conditions: list[str] = []
+        params: dict[str, Any] = {}
+
+        if not include_inactive:
+            conditions.append("is_active = true")
+
+        if location_type in ("Indoor", "Outdoor"):
+            conditions.append("location_type in (:loc_a, :loc_b)")
+            params["loc_a"] = location_type
+            params["loc_b"] = "Both"
+
+        if caring_style == "I'm a bit forgetful":
+            conditions.append("caring_difficulty = 'low'")
+
+        if light_condition:
+            conditions.append("lower(light_requirements) like :light_pattern")
+            params["light_pattern"] = f"%{light_condition.lower()}%"
+
+        if pet_safe_only:
+            conditions.append("pet_safe = true")
+
+        where_clause = ("where " + " and ".join(conditions)) if conditions else ""
         pagination_clause = (
             f"limit {limit} offset {offset}" if limit is not None else ""
         )
@@ -81,7 +108,7 @@ class PlantService:
             {pagination_clause}
             """
         )
-        result = await session.execute(query)
+        result = await session.execute(query, params)
         return [dict(row) for row in result.mappings().all()]
 
     async def get_plant_by_id(
@@ -126,6 +153,8 @@ class PlantService:
                 light_requirements,
                 temperature,
                 pet_safe,
+                location_type,
+                caring_difficulty,
                 source,
                 ai_confidence,
                 created_by_user_id,
@@ -141,6 +170,8 @@ class PlantService:
                 :light_requirements,
                 :temperature,
                 :pet_safe,
+                :location_type,
+                :caring_difficulty,
                 :source,
                 :ai_confidence,
                 cast(:created_by_user_id as uuid),
@@ -182,6 +213,8 @@ class PlantService:
                 "light_requirements",
                 "temperature",
                 "pet_safe",
+                "location_type",
+                "caring_difficulty",
                 "source",
                 "ai_confidence",
                 "reviewed_by_admin",
