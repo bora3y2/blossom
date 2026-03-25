@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -51,11 +52,115 @@ CARE_TASK_SELECT_COLUMNS = """
 """
 
 CARE_TASK_RECURRENCE_DAYS = {
-    "water": 1,
     "light": 2,
     "temperature": 3,
     "fertilize": 30,
 }
+
+# ── Watering schedule helpers ──────────────────────────────────────────────────
+
+_DAY_KEYS: dict[str, int] = {
+    "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6,
+}
+
+
+def _water_times_in_day(day_start: datetime, times: int) -> list[datetime]:
+    """Return evenly-spaced watering datetimes within a single calendar day."""
+    times = max(1, min(24, times))
+    interval = 24 / times
+    return [day_start + timedelta(hours=interval * i + interval / 2) for i in range(times)]
+
+
+def _get_next_water_time(schedule_json: str, after: datetime) -> datetime:
+    """
+    Compute the next watering datetime from a schedule JSON string.
+
+    Schedule formats:
+      {"type": "daily",   "times_per_day": 3}
+      {"type": "weekly",  "days":  [{"day": "mon", "times": 2}, ...]}
+      {"type": "monthly", "dates": [{"date": 1,    "times": 2}, ...]}
+
+    Legacy format: plain numeric string (interpreted as days interval).
+    """
+    try:
+        schedule = json.loads(schedule_json)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        # Legacy: float-string = days interval
+        try:
+            days = float(schedule_json)
+            return after + timedelta(days=max(1 / 24, days))
+        except (ValueError, TypeError):
+            return after + timedelta(days=7)
+
+    kind = schedule.get("type")
+
+    if kind == "daily":
+        times = max(1, min(24, int(schedule.get("times_per_day", 1))))
+        return after + timedelta(hours=24 / times)
+
+    if kind == "weekly":
+        days_config = schedule.get("days") or []
+        if not days_config:
+            return after + timedelta(days=7)
+        scheduled = {
+            _DAY_KEYS[d["day"]]: max(1, min(24, int(d.get("times", 1))))
+            for d in days_config
+            if d.get("day") in _DAY_KEYS
+        }
+        for offset in range(14):
+            day_start = (after + timedelta(days=offset)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            wd = day_start.weekday()
+            if wd in scheduled:
+                for t in _water_times_in_day(day_start, scheduled[wd]):
+                    if t > after:
+                        return t
+        return after + timedelta(days=7)
+
+    if kind == "monthly":
+        dates_config = schedule.get("dates") or []
+        if not dates_config:
+            return after + timedelta(days=30)
+        scheduled = {
+            max(1, min(31, int(d["date"]))): max(1, min(24, int(d.get("times", 1))))
+            for d in dates_config
+            if d.get("date") is not None
+        }
+        for offset in range(62):
+            day_start = (after + timedelta(days=offset)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            if day_start.day in scheduled:
+                for t in _water_times_in_day(day_start, scheduled[day_start.day]):
+                    if t > after:
+                        return t
+        return after + timedelta(days=30)
+
+    return after + timedelta(days=7)
+
+
+def _water_description(schedule_json: str) -> str:
+    """Return a human-readable watering description from a schedule JSON string."""
+    try:
+        s = json.loads(schedule_json)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return "Water on schedule"
+
+    kind = s.get("type")
+    if kind == "daily":
+        t = max(1, int(s.get("times_per_day", 1)))
+        return f"Water {t} time{'s' if t > 1 else ''} per day"
+    if kind == "weekly":
+        total = sum(int(d.get("times", 1)) for d in s.get("days", []))
+        return f"Water {total} time{'s' if total != 1 else ''} per week"
+    if kind == "monthly":
+        total = sum(int(d.get("times", 1)) for d in s.get("dates", []))
+        return f"Water {total} time{'s' if total != 1 else ''} per month"
+    return "Water on schedule"
+
+
+# ── Service ────────────────────────────────────────────────────────────────────
 
 
 class GardenService:
@@ -215,9 +320,9 @@ class GardenService:
         task_definitions = [
             {
                 "title": f"Water {plant['common_name']}",
-                "description": plant["water_requirements"],
+                "description": _water_description(plant["water_requirements"]),
                 "task_type": "water",
-                "due_at": now + timedelta(days=1),
+                "due_at": _get_next_water_time(plant["water_requirements"], now),
             },
             {
                 "title": f"Check light for {plant['common_name']}",
@@ -260,12 +365,29 @@ class GardenService:
         session: AsyncSession,
         task: dict[str, Any],
     ) -> dict[str, Any] | None:
-        recurrence_days = CARE_TASK_RECURRENCE_DAYS.get(task["task_type"])
-        if recurrence_days is None:
-            return None
-
         completed_at = task.get("completed_at") or datetime.now(timezone.utc)
-        next_due_at = completed_at + timedelta(days=recurrence_days)
+
+        if task["task_type"] == "water":
+            plant_query = text(
+                """
+                select p.water_requirements
+                from public.user_plants up
+                join public.plants p on p.id = up.plant_id
+                where up.id = cast(:user_plant_id as uuid)
+                """
+            )
+            plant_result = await session.execute(
+                plant_query, {"user_plant_id": task["user_plant_id"]}
+            )
+            plant_row = plant_result.mappings().first()
+            schedule_json = (plant_row["water_requirements"] if plant_row else None) or "7"
+            next_due_at = _get_next_water_time(schedule_json, completed_at)
+        else:
+            recurrence_days = CARE_TASK_RECURRENCE_DAYS.get(task["task_type"])
+            if recurrence_days is None:
+                return None
+            next_due_at = completed_at + timedelta(days=recurrence_days)
+
         query = text(
             f"""
             insert into public.care_tasks (

@@ -20,6 +20,8 @@ async def get_db_session() -> AsyncSession:
     try:
         async with AsyncSessionLocal() as session:
             yield session
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Database session error: %s", exc)
         raise HTTPException(
