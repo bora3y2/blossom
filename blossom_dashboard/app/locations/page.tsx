@@ -185,7 +185,7 @@ export default function LocationsPage() {
   return (
     <ProtectedShell>
       <div className="flex h-full flex-col gap-6 overflow-y-auto">
-        <Topbar title="Locations" />
+        <Topbar title="Locations" subtitle="Manage countries and their states for user location and weather display." />
 
         {error && (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
