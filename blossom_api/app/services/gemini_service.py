@@ -128,7 +128,16 @@ class GeminiService:
             )
         data = response.json()
         try:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            parts = data["candidates"][0]["content"]["parts"]
+            # Thinking models (e.g. gemini-flash-latest) prepend thought-only parts
+            # that have no text or empty text — skip them to find the real response.
+            text = next(
+                (p["text"] for p in parts if p.get("text", "").strip()),
+                None,
+            )
+            if not text:
+                raise KeyError("no text part in response")
+            return text
         except (KeyError, IndexError, TypeError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
