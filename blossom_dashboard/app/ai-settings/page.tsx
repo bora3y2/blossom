@@ -226,12 +226,23 @@ export default function AiSettingsPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-200">Model</label>
-                    <input
+                    <select
                       value={form.model}
                       onChange={(e) => setForm((f) => f && { ...f, model: e.target.value })}
                       required
                       className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none transition focus:border-emerald-400"
-                    />
+                    >
+                      <optgroup label="Flash (fast & efficient)">
+                        <option value="gemini-flash-latest">gemini-flash-latest (recommended)</option>
+                        <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                        <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                      </optgroup>
+                      <optgroup label="Pro (higher quality)">
+                        <option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
+                        <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                      </optgroup>
+                    </select>
                   </div>
                 </div>
 
