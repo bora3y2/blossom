@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/app_session.dart';
 import '../../core/image_utils.dart';
 import '../../models/garden_models.dart';
+import '../../models/location_models.dart';
 import '../../repositories/garden_repository.dart';
+import '../../repositories/location_repository.dart';
+import '../../repositories/profile_repository.dart';
 import '../../core/theme.dart';
 
 class GardenHomeScreen extends StatefulWidget {
@@ -21,6 +24,7 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
   String? _errorMessage;
   List<UserPlantModel> _plants = const [];
   final Set<String> _completingTaskIds = <String>{};
+  WeatherModel? _weather;
 
   @override
   void didChangeDependencies() {
@@ -54,12 +58,12 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
                     const SizedBox(height: 16),
                     _buildQuickActions(context),
                     const SizedBox(height: 32),
-                    if (_plants.isEmpty)
-                      _buildEmptyState(context)
-                    else ...[
+                    if (_plants.isNotEmpty) ...[
                       _buildGardenOverview(),
                       const SizedBox(height: 32),
-                      _buildDailyTasks(tasks),
+                    ],
+                    _buildDailyTasks(tasks),
+                    if (_plants.isNotEmpty) ...[
                       const SizedBox(height: 32),
                       _buildRecentPlants(context),
                     ],
@@ -88,6 +92,16 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
                   color: AppTheme.primary.withValues(alpha: 0.7),
                 ),
               ),
+              if (_weather != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '${_weather!.stateName}, ${_weather!.countryName} • ${_weather!.temperatureCelsius.round()}°C',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.primary.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -126,7 +140,7 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
           ),
           GestureDetector(
             onTap: () {
-              context.push('/add_plant_1');
+              context.push('/ai_identify');
             },
             child: Container(
               width: 40,
@@ -135,7 +149,7 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
                 color: AppTheme.primary.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.add, color: AppTheme.primary, size: 20),
+              child: const Icon(Icons.smart_toy_outlined, color: AppTheme.primary, size: 20),
             ),
           ),
         ],
@@ -154,7 +168,7 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
               child: _buildActionCard(
                 'Add\nPlant',
                 Icons.add_circle_outline,
-                'https://images.unsplash.com/photo-1485909645661-8e05c8680d28?q=80&w=600&auto=format&fit=crop',
+                const AssetImage('assets/images/add_plant.png'),
               ),
             ),
           ),
@@ -165,7 +179,7 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
               child: _buildActionCard(
                 'My\nGarden',
                 Icons.local_florist,
-                'https://images.unsplash.com/photo-1416879598553-300fb2246b8d?q=80&w=600&auto=format&fit=crop',
+                const AssetImage('assets/images/mygarden.jpg'),
               ),
             ),
           ),
@@ -174,14 +188,14 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, String imageUrl) {
+  Widget _buildActionCard(String title, IconData icon, ImageProvider image) {
     return AspectRatio(
       aspectRatio: 4 / 5,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           image: DecorationImage(
-            image: CachedNetworkImageProvider(imageUrl),
+            image: image,
             fit: BoxFit.cover,
           ),
         ),
@@ -534,56 +548,6 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
-              child: const Icon(
-                Icons.eco_outlined,
-                color: AppTheme.primary,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Your garden is empty',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Add your first plant to unlock care tasks and a personalized garden dashboard.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black87,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => context.push('/add_plant_1'),
-              child: const Text('Add your first plant'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildErrorState() {
     return Center(
       child: Padding(
@@ -618,31 +582,35 @@ class _GardenHomeScreenState extends State<GardenHomeScreen> {
   }
 
   Future<void> _loadGarden() async {
-    final repository = GardenRepository(AppSessionScope.of(context));
+    final session = AppSessionScope.of(context);
+    final gardenRepo = GardenRepository(session);
+    final profileRepo = ProfileRepository(session);
+    final locationRepo = LocationRepository(session);
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      final plants = await repository.fetchMyGarden();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _plants = plants;
-      });
+      final plants = await gardenRepo.fetchMyGarden();
+      if (!mounted) return;
+      setState(() => _plants = plants);
+
+      // Fetch weather silently — failure must not break the garden screen
+      try {
+        final profile = await profileRepo.fetchMyProfile();
+        if (!mounted) return;
+        if (profile.stateId != null) {
+          final weather = await locationRepo.fetchCurrentWeather(profile.stateId!);
+          if (!mounted) return;
+          setState(() => _weather = weather);
+        }
+      } catch (_) {}
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = '$error';
-      });
+      if (!mounted) return;
+      setState(() => _errorMessage = '$error');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }

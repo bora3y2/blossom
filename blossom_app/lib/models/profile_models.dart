@@ -6,6 +6,8 @@ class ProfileModel {
     required this.avatarPath,
     required this.role,
     required this.notificationsEnabled,
+    required this.countryId,
+    required this.stateId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -16,6 +18,8 @@ class ProfileModel {
   final String? avatarPath;
   final String role;
   final bool notificationsEnabled;
+  final int? countryId;
+  final int? stateId;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -36,6 +40,8 @@ class ProfileModel {
       avatarPath: json['avatar_path'] as String?,
       role: json['role'] as String,
       notificationsEnabled: json['notifications_enabled'] as bool? ?? true,
+      countryId: json['country_id'] as int?,
+      stateId: json['state_id'] as int?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );

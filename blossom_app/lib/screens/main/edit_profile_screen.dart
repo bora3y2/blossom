@@ -7,7 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/app_session.dart';
 import '../../core/image_utils.dart';
 import '../../core/theme.dart';
+import '../../models/location_models.dart';
 import '../../models/profile_models.dart';
+import '../../repositories/location_repository.dart';
 import '../../repositories/profile_repository.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  bool _didLoad = false;
   bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
@@ -27,14 +30,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   XFile? _selectedImage;
   final ImagePicker _picker = ImagePicker();
 
+  // Location state
+  List<CountryModel> _countries = [];
+  List<StateModel> _states = [];
+  int? _selectedCountryId;
+  int? _selectedStateId;
+  bool _loadingStates = false;
+
   ProfileRepository _repository(BuildContext context) {
     return ProfileRepository(AppSessionScope.of(context));
+  }
+
+  LocationRepository _locationRepo(BuildContext context) {
+    return LocationRepository(AppSessionScope.of(context));
   }
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoad) return;
+    _didLoad = true;
     _loadProfile();
   }
 
@@ -46,11 +67,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final profile = await _repository(context).fetchMyProfile();
+      final profileRepo = _repository(context);
+      final locationRepo = _locationRepo(context);
+      final results = await Future.wait([
+        profileRepo.fetchMyProfile(),
+        locationRepo.fetchCountries(),
+      ]);
+      final profile = results[0] as ProfileModel;
+      final countries = results[1] as List<CountryModel>;
+
+      List<StateModel> states = [];
+      if (profile.countryId != null) {
+        try {
+          states = await locationRepo.fetchStates(profile.countryId!);
+        } catch (_) {}
+      }
+
       if (!mounted) return;
       setState(() {
         _profile = profile;
         _nameController.text = profile.displayName ?? '';
+        _countries = countries;
+        _states = states;
+        _selectedCountryId = profile.countryId;
+        _selectedStateId = profile.stateId;
         _isLoading = false;
         _errorMessage = null;
       });
@@ -60,6 +100,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _errorMessage = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _onCountryChanged(int? countryId) async {
+    setState(() {
+      _selectedCountryId = countryId;
+      _selectedStateId = null;
+      _states = [];
+      _loadingStates = countryId != null;
+    });
+    if (countryId == null) return;
+    final repo = _locationRepo(context);
+    try {
+      final states = await repo.fetchStates(countryId);
+      if (!mounted) return;
+      setState(() {
+        _states = states;
+        _loadingStates = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingStates = false);
     }
   }
 
@@ -92,9 +154,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await repo.updateAvatar(_selectedImage!);
       }
 
-      if (_nameController.text.trim().isNotEmpty &&
-          _nameController.text.trim() != _profile?.displayName) {
-        await repo.updateMyProfile(displayName: _nameController.text.trim());
+      final newName = _nameController.text.trim();
+      final nameChanged = newName.isNotEmpty && newName != _profile?.displayName;
+      final countryChanged = _selectedCountryId != _profile?.countryId;
+      final stateChanged = _selectedStateId != _profile?.stateId;
+
+      if (nameChanged || countryChanged || stateChanged) {
+        await repo.updateMyProfile(
+          displayName: nameChanged ? newName : null,
+          countryId: countryChanged ? _selectedCountryId : null,
+          stateId: stateChanged ? _selectedStateId : null,
+        );
       }
 
       if (!mounted) return;
@@ -131,7 +201,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
               ElevatedButton(
                 onPressed: () {
-                  setState(() => _isLoading = true);
+                  setState(() {
+                    _isLoading = true;
+                    _errorMessage = null;
+                  });
                   _loadProfile();
                 },
                 child: const Text('Retry'),
@@ -237,6 +310,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 16),
+            // Country dropdown
+            DropdownButtonFormField<int>(
+              initialValue: _selectedCountryId,
+              decoration: const InputDecoration(
+                labelText: 'Country',
+                border: OutlineInputBorder(),
+              ),
+              hint: const Text('Select country'),
+              items: _countries.map((c) {
+                return DropdownMenuItem<int>(
+                  value: c.id,
+                  child: Text(c.name),
+                );
+              }).toList(),
+              onChanged: _isSaving
+                  ? null
+                  : (value) => _onCountryChanged(value),
+            ),
+            if (_selectedCountryId != null) ...[
+              const SizedBox(height: 16),
+              _loadingStates
+                  ? const Center(child: CircularProgressIndicator())
+                  : DropdownButtonFormField<int>(
+                      // key forces rebuild when country changes so selection resets
+                      key: ValueKey('state_$_selectedCountryId'),
+                      initialValue: _selectedStateId,
+                      decoration: const InputDecoration(
+                        labelText: 'State / City',
+                        border: OutlineInputBorder(),
+                      ),
+                      hint: const Text('Select state'),
+                      items: _states.map((s) {
+                        return DropdownMenuItem<int>(
+                          value: s.id,
+                          child: Text(s.name),
+                        );
+                      }).toList(),
+                      onChanged: _isSaving
+                          ? null
+                          : (value) => setState(() => _selectedStateId = value),
+                    ),
+            ],
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,

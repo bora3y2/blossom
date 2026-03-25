@@ -18,10 +18,18 @@ from app.schemas.community import (
     ReportStatusUpdateRequest,
     VisibilityUpdateRequest,
 )
+from app.schemas.location import (
+    CountryCreateRequest,
+    CountryResponse,
+    StateCreateRequest,
+    StateResponse,
+    StateUpdateRequest,
+)
 from app.schemas.plant import PlantCreateRequest, PlantResponse, PlantUpdateRequest
 from app.services.ai_service import ai_service
 from app.services.ai_settings_service import ai_settings_service
 from app.services.community_service import community_service
+from app.services.location_service import location_service
 from app.services.plant_service import plant_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -222,3 +230,65 @@ async def list_audit_log(
 ) -> AuditLogListResponse:
     items = await community_service.list_audit_log(session)
     return AuditLogListResponse(items=items, meta={"count": len(items)})
+
+
+# ── Countries & States ─────────────────────────────────────────────────
+
+@router.post("/countries", response_model=CountryResponse)
+async def create_country(
+    payload: CountryCreateRequest,
+    _: dict[str, Any] = Depends(require_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> CountryResponse:
+    country = await location_service.create_country(session, payload.name)
+    return CountryResponse(**country)
+
+
+@router.delete("/countries/{country_id}", response_model=DeleteResponse)
+async def delete_country(
+    country_id: int,
+    _: dict[str, Any] = Depends(require_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> DeleteResponse:
+    await location_service.delete_country(session, country_id)
+    return DeleteResponse(success=True, message="Country deleted.")
+
+
+@router.post("/countries/{country_id}/states", response_model=StateResponse)
+async def create_state(
+    country_id: int,
+    payload: StateCreateRequest,
+    _: dict[str, Any] = Depends(require_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> StateResponse:
+    state = await location_service.create_state(
+        session,
+        country_id=country_id,
+        name=payload.name,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+    )
+    return StateResponse(**state)
+
+
+@router.patch("/states/{state_id}", response_model=StateResponse)
+async def update_state(
+    state_id: int,
+    payload: StateUpdateRequest,
+    _: dict[str, Any] = Depends(require_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> StateResponse:
+    state = await location_service.update_state(
+        session, state_id, payload.model_dump(exclude_unset=True)
+    )
+    return StateResponse(**state)
+
+
+@router.delete("/states/{state_id}", response_model=DeleteResponse)
+async def delete_state(
+    state_id: int,
+    _: dict[str, Any] = Depends(require_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> DeleteResponse:
+    await location_service.delete_state(session, state_id)
+    return DeleteResponse(success=True, message="State deleted.")

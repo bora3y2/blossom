@@ -27,6 +27,8 @@ class ProfileRepository {
     String? displayName,
     String? avatarPath,
     bool? notificationsEnabled,
+    int? countryId,
+    int? stateId,
   }) async {
     final body = <String, dynamic>{};
     if (displayName != null) {
@@ -37,6 +39,12 @@ class ProfileRepository {
     }
     if (notificationsEnabled != null) {
       body['notifications_enabled'] = notificationsEnabled;
+    }
+    if (countryId != null) {
+      body['country_id'] = countryId;
+    }
+    if (stateId != null) {
+      body['state_id'] = stateId;
     }
     final data =
         await _apiClient.patchJson('/profiles/me', body: body)

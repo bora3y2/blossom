@@ -103,7 +103,7 @@ class ProfileService:
         allowed_updates = {
             key: value
             for key, value in updates.items()
-            if key in {"display_name", "avatar_path", "notifications_enabled"}
+            if key in {"display_name", "avatar_path", "notifications_enabled", "country_id", "state_id"}
         }
         if not allowed_updates:
             return await self.get_profile_by_id(profile_id)

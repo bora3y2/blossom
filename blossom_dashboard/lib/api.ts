@@ -5,9 +5,11 @@ import type {
   CommunityComment,
   CommunityFeed,
   CommunityPost,
+  Country,
   Plant,
   PlantMutationPayload,
   Profile,
+  State,
 } from '@/lib/types';
 
 export class ApiError extends Error {
@@ -213,5 +215,62 @@ export function getAdminAuditLog(accessToken: string) {
     {
       method: 'GET',
     },
+  );
+}
+
+// ── Countries & States ─────────────────────────────────────────────────
+
+export function listCountries(accessToken: string) {
+  return authenticatedFetch<Country[]>('/location/countries', accessToken, { method: 'GET' });
+}
+
+export function createAdminCountry(accessToken: string, payload: { name: string }) {
+  return authenticatedFetch<Country>('/admin/countries', accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminCountry(accessToken: string, countryId: number) {
+  return authenticatedFetch<{ success: boolean; message: string }>(
+    `/admin/countries/${countryId}`,
+    accessToken,
+    { method: 'DELETE' },
+  );
+}
+
+export function listStates(accessToken: string, countryId: number) {
+  return authenticatedFetch<State[]>(`/location/countries/${countryId}/states`, accessToken, {
+    method: 'GET',
+  });
+}
+
+export function createAdminState(
+  accessToken: string,
+  countryId: number,
+  payload: { name: string; latitude: number; longitude: number },
+) {
+  return authenticatedFetch<State>(`/admin/countries/${countryId}/states`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminState(
+  accessToken: string,
+  stateId: number,
+  payload: Partial<{ name: string; latitude: number; longitude: number }>,
+) {
+  return authenticatedFetch<State>(`/admin/states/${stateId}`, accessToken, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminState(accessToken: string, stateId: number) {
+  return authenticatedFetch<{ success: boolean; message: string }>(
+    `/admin/states/${stateId}`,
+    accessToken,
+    { method: 'DELETE' },
   );
 }

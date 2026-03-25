@@ -134,3 +134,18 @@ export type AuditLogEntry = {
   metadata: Record<string, any>;
   created_at: string;
 };
+
+export type Country = {
+  id: number;
+  name: string;
+  created_at: string;
+};
+
+export type State = {
+  id: number;
+  country_id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  created_at: string;
+};

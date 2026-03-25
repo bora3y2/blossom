@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, Leaf, LayoutDashboard, LogOut, MessageSquareWarning, ShieldCheck, ClipboardList } from 'lucide-react';
+import { Bot, Leaf, LayoutDashboard, LogOut, MapPin, MessageSquareWarning, ShieldCheck, ClipboardList } from 'lucide-react';
 
 import { useAuth } from '@/components/providers/auth-provider';
 import { Panel } from '@/components/ui/panel';
@@ -33,6 +33,11 @@ const items = [
     href: '/ai-settings',
     label: 'AI Settings',
     icon: Bot,
+  },
+  {
+    href: '/locations',
+    label: 'Locations',
+    icon: MapPin,
   },
 ];
 

@@ -13,6 +13,8 @@ class ProfileResponse(BaseModel):
     avatar_path: str | None
     role: Literal["user", "admin"]
     notifications_enabled: bool
+    country_id: int | None = None
+    state_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -21,6 +23,8 @@ class ProfileUpdateRequest(BaseModel):
     display_name: str | None = None
     avatar_path: str | None = None
     notifications_enabled: bool | None = None
+    country_id: int | None = None
+    state_id: int | None = None
 
 
 class ProfileRoleUpdateRequest(BaseModel):
