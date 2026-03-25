@@ -29,7 +29,10 @@ class GeminiService:
             ],
             "generationConfig": {
                 "temperature": 0,
-                "maxOutputTokens": 32,
+                # Thinking models use output token budget for reasoning first;
+                # 32 is exhausted by thinking alone, leaving no tokens for the
+                # actual reply. Use 512 to give thinking models enough room.
+                "maxOutputTokens": 512,
             },
         }
         response_text = await self._generate_content(
